@@ -2,29 +2,48 @@ import React, { useState } from "react";
 import { useQuery, useQueryClient } from "react-query";
 import { addMattress, updateMattress, deleteMattress, getAllMattresses } from "../services/mattress.js";
 import { Layout } from "../components/Layout";
-import { Toast } from "../components/Toast"; // Importamos el componente Toast
-import { Modal } from "../components/Modal"; // Importamos el componente Modal
+import { Toast } from "../components/Toast";
+import { Modal } from "../components/Modal";
+
+const fields = [
+  { name: "name", label: "Nombre del colchón", type: "text", required: true },
+  { name: "brand", label: "Marca", type: "text", required: false }, // Este campo sigue siendo opcional
+  { name: "dimensions", label: "Dimensiones (cm)", type: "text", required: true }, // Cambié 'width', 'length', 'height' a 'dimensions'
+  { name: "material", label: "Material principal", type: "text", required: true }, // Este campo es ahora obligatorio
+  { name: "price", label: "Precio", type: "number", required: true }, // El precio sigue siendo obligatorio
+  { name: "images", label: "Imágenes", type: "file", required: false } // Campo opcional para subir imágenes
+];
 
 const Dashboard = () => {
+
+  const initialFormData = fields.reduce((acc, field) => {
+    if (field.type === "checkbox-group") {
+      // Para los grupos de checkboxes, inicializamos un array vacío
+      acc[field.name] = [];
+    } else if (field.type === "file") {
+      // Para los archivos, inicializamos como null
+      acc[field.name] = null;
+    } else {
+      // Para otros tipos de campos, inicializamos como cadena vacía
+      acc[field.name] = "";
+    }
+    return acc;
+  }, {});
+  
+  const [formData, setFormData] = useState(initialFormData);
+  
+
+
   const queryClient = useQueryClient();
-  const [formData, setFormData] = useState({
-    name: "",
-    dimensions: "",
-    material: "",
-    price: ""
-  });
+  //const [formData, setFormData] = useState({ firmness: "", features: [], layers: "", images: null });
   const [isUpdating, setIsUpdating] = useState(false);
   const [toast, setToast] = useState({ message: "", type: "" });
   const [modal, setModal] = useState({ isActive: false, message: "", onConfirm: null });
 
-  const { data: mattresses = [] } = useQuery(
-    ["mattresses"],
-    getAllMattresses,
-    {
-      staleTime: 1000 * 60 * 5,
-      refetchInterval: 1000 * 30,
-    }
-  );
+  const { data: mattresses = [] } = useQuery(["mattresses"], getAllMattresses, {
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 30,
+  });
 
   const showToast = (message, type) => {
     setToast({ message, type });
@@ -32,47 +51,66 @@ const Dashboard = () => {
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type, checked, files } = e.target;
+    
+    if (type === "checkbox") {
+      setFormData((prev) => ({
+        ...prev,
+        features: checked
+          ? [...prev.features, value]
+          : prev.features.filter((feature) => feature !== value),
+      }));
+    } else if (type === "file") {
+      setFormData((prev) => ({ ...prev, [name]: files[0] })); // Almacena el archivo seleccionado
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
+ 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isUpdating) {
-      await updateMattress(formData._id, formData);
-      showToast("Mattress updated successfully!", "success");
-    } else {
-      await addMattress(formData);
-      showToast("Mattress added successfully!", "success");
+    
+    // Validación de campos requeridos
+    for (const field of fields) {
+      if (field.required && !formData[field.name]) {
+        showToast(`El campo ${field.label} es obligatorio`, "error");
+        return;
+      }
     }
-    setFormData({ name: "", dimensions: "", material: "", price: "" });
-    setIsUpdating(false);
-    queryClient.invalidateQueries(["mattresses"]);
-  };
-
-  const handleEdit = (mattress) => {
-    const { _id, name, dimensions, material, price } = mattress;
-    setFormData({
-      _id,
-      name,
-      dimensions,
-      material,
-      price
-    });
-    setIsUpdating(true);
-  };
-
-  const handleDelete = async (id) => {
-    setModal({
-      isActive: true,
-      message: "Are you sure you want to delete this mattress?",
-      onConfirm: async () => {
-        await deleteMattress(id);
-        showToast("Mattress deleted successfully!", "success");
-        queryClient.invalidateQueries(["mattresses"]);
-        setModal({ isActive: false, message: "", onConfirm: null });
+  
+    const data = new FormData();
+    Object.keys(formData).forEach((key) => {
+      if (key === "features") {
+        formData[key].forEach((feature) => data.append("features", feature));
+      } else if (key === "layers") {
+        formData[key].split(",").forEach((layer) => data.append("layers", layer.trim()));
+      } else if (key === "images" && formData[key]) {
+        // Asegúrate de que `formData[key]` es un archivo
+        data.append("images", formData[key]);
+      } else {
+        data.append(key, formData[key]);
       }
     });
+  
+    try {
+      if (isUpdating) {
+        await updateMattress(formData._id, data);
+        showToast("Colchón actualizado correctamente", "success");
+      } else {
+        await addMattress(data);
+        showToast("Colchón agregado correctamente", "success");
+      }
+      setFormData(initialFormData); // Restablecer el formulario
+      setIsUpdating(false);
+      queryClient.invalidateQueries(["mattresses"]);
+    } catch (error) {
+      showToast("Error al procesar la solicitud", "error");
+    }
   };
+  
+  
+  
 
   return (
     <Layout>
@@ -80,121 +118,67 @@ const Dashboard = () => {
         <div className="container">
           <h1 className="title">Dashboard</h1>
           <form onSubmit={handleSubmit}>
-            <div className="field">
-              <label className="label">Name</label>
-              <div className="control">
-                <input
-                  className="input"
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
+            {fields.map(({ name, label, type, required, options }) => (
+              <div className="field" key={name}>
+                <label className="label">{label}</label>
+                <div className="control">
+                  {type === "select" ? (
+                    <div className="select">
+                      <select name={name} value={formData[name] || ""} onChange={handleChange}>
+                        <option value="">Seleccione...</option>
+                        {options.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : type === "checkbox-group" ? (
+                    <div>
+                      {options.map((option) => (
+                        <label key={option} className="checkbox">
+                          <input
+                            type="checkbox"
+                            name={name}
+                            value={option}
+                            checked={formData.features.includes(option)}
+                            onChange={handleChange}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  ) : type === "file" ? (
+                    <input
+                      className="input"
+                      type={type}
+                      name={name}
+                      onChange={handleChange}
+                      required={required}
+                    />
+                  ) : (
+                    <input
+                      className="input"
+                      type={type}
+                      name={name}
+                      value={formData[name] || ""}
+                      onChange={handleChange}
+                      required={required}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="field">
-              <label className="label">Dimensions</label>
-              <div className="control">
-                <input
-                  className="input"
-                  type="text"
-                  name="dimensions"
-                  value={formData.dimensions}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="field">
-              <label className="label">Material</label>
-              <div className="control">
-                <input
-                  className="input"
-                  type="text"
-                  name="material"
-                  value={formData.material}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="field">
-              <label className="label">Price</label>
-              <div className="control">
-                <input
-                  className="input"
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
+            ))}
             <div className="control">
               <button className="button is-primary" type="submit">
-                {isUpdating ? "Update Mattress" : "Add Mattress"}
+                {isUpdating ? "Actualizar colchón" : "Agregar colchón"}
               </button>
             </div>
           </form>
-
-          {
-            mattresses.length > 0 ? <table className="table is-fullwidth is-striped mt-5">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Dimensions</th>
-                  <th>Material</th>
-                  <th>Price</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mattresses.map((mattress) => (
-                  <tr key={mattress._id}>
-                    <td>{mattress.name}</td>
-                    <td>{mattress.dimensions}</td>
-                    <td>{mattress.material}</td>
-                    <td>{mattress.price}</td>
-                    <td>
-                      <button
-                        className="button is-info is-small"
-                        onClick={() => handleEdit(mattress)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="button is-danger is-small ml-2"
-                        onClick={() => handleDelete(mattress._id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table> : <div className="notification is-warning has-text-centered mt-5">
-              <h2 className="title is-4">No hay colchones disponibles</h2>
-              <p>Por favor, añade un colchón para que aparezca en la lista.</p>
-            </div>
-          }
         </div>
       </section>
-
-      {/* Componente Toast */}
-      {toast.message && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: "", type: "" })} />
-      )}
-
-      {/* Componente Modal */}
-      <Modal
-        isActive={modal.isActive}
-        title="Confirmation"
-        message={modal.message}
-        onConfirm={modal.onConfirm}
-        onCancel={() => setModal({ isActive: false, message: "", onConfirm: null })}
-      />
+      {toast.message && <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: "", type: "" })} />}
+      <Modal isActive={modal.isActive} title="Confirmación" message={modal.message} onConfirm={modal.onConfirm} onCancel={() => setModal({ isActive: false, message: "", onConfirm: null })} />
     </Layout>
   );
 };
