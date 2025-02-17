@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQuery, useQueryClient } from "react-query";
+import { useQuery, useMutation, useQueryClient } from "react-query";
 import {
   addMattress,
   updateMattress,
@@ -45,6 +45,17 @@ const Dashboard = () => {
     refetchInterval: 30000,
   });
 
+  const deleteMutation = useMutation(deleteMattress, {
+    onSuccess: () => {
+      queryClient.invalidateQueries("mattresses");
+      handleSnackbar("Colchón eliminado correctamente");
+      setDialog({ open: false, id: null });
+    },
+    onError: () => {
+      handleSnackbar("Error al eliminar colchón");
+    },
+  });
+
   const handleSnackbar = (message) => setSnackbar({ message, open: true });
   const handleCloseSnackbar = () => setSnackbar({ message: "", open: false });
 
@@ -86,6 +97,12 @@ const Dashboard = () => {
       queryClient.invalidateQueries("mattresses");
     } catch (error) {
       handleSnackbar("Error al procesar la solicitud");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (dialog.id) {
+      deleteMutation.mutate(dialog.id);
     }
   };
 
@@ -160,6 +177,15 @@ const Dashboard = () => {
             </Table>
           )}
         </Paper>
+
+        <Dialog open={dialog.open} onClose={() => setDialog({ open: false, id: null })}>
+          <DialogTitle>Confirmar eliminación</DialogTitle>
+          <DialogContent>¿Estás seguro de que deseas eliminar este colchón?</DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDialog({ open: false, id: null })}>Cancelar</Button>
+            <Button onClick={handleDelete} color="error">Eliminar</Button>
+          </DialogActions>
+        </Dialog>
       </Container>
     </Layout>
   );
