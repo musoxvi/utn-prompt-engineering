@@ -3,6 +3,7 @@ import { Dashboard } from "../pages/Dashboard.jsx";
 import { Products } from "../pages/Products.jsx";
 import { Login } from "../pages/Login.jsx";
 import { useAuth } from "../context/auth.jsx";
+import { ProductDetails } from "../pages/ProductDetails.jsx";
 
 function Router() {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ function Router() {
           element={user ? <Dashboard /> : <Navigate to="/login" />}
         />
         <Route path="/login" element={<Login />} />
+        <Route path="/product/:id" element={<ProductDetails />} />
       </Routes>
     </BrowserRouter>
   );
