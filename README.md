@@ -4,6 +4,10 @@
 
 This project is the final assignment for the **Prompt Engineering** course at UTN. It focuses on leveraging AI tools for programming and software development. The application consists of a **frontend** built with React and a **backend** using Node.js, Express, and MongoDB. Firebase is also integrated for authentication via Google Login.
 
+## 🎥 App Demo
+
+![Demo](frontend/src/assets/demo.gif)
+
 ## Technologies Used
 
 ### Frontend
